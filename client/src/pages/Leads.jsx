@@ -8,17 +8,35 @@ const Badge = ({ children }) => (
   </span>
 );
 
-function normalizeApiBase(raw) {
-  const v = (raw || "").trim().replace(/\/+$/, ""); // remove trailing slashes
+function getApiBase() {
+  // Vite exposes env vars at build time
+  const raw = (import.meta.env.VITE_API_URL || "").trim();
 
-  // If user accidentally set VITE_API_URL to ".../api", keep it as-is.
-  // Otherwise append "/api".
-  if (v.endsWith("/api")) return v;
-  return `${v}/api`;
+  // Local dev fallback (so it still works on localhost)
+  if (!raw) return "http://localhost:5000/api";
+
+  // Remove trailing slashes
+  let base = raw.replace(/\/+$/, "");
+
+  // If user already included /api, keep it. Otherwise append /api
+  if (!base.endsWith("/api")) base = `${base}/api`;
+
+  return base;
+}
+
+async function fetchJson(url, options) {
+  const res = await fetch(url, options);
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText} - ${text || url}`);
+  }
+
+  return res.json();
 }
 
 export default function Leads() {
-  const API = normalizeApiBase(import.meta.env.VITE_API_URL);
+  const API = getApiBase();
 
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
@@ -31,16 +49,11 @@ export default function Leads() {
   async function loadLeads() {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/leads`);
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
-      }
-      const fresh = await res.json();
+      const fresh = await fetchJson(`${API}/leads`);
       setLeads(fresh);
     } catch (err) {
-      console.error("Load leads failed:", err);
-      alert("Failed to load leads from server.");
+      console.error(err);
+      alert(`Failed to load leads.\n\n${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -67,28 +80,19 @@ export default function Leads() {
   }, [query, status, leads]);
 
   async function updateLeadStatus(id, nextStatus) {
-    const res = await fetch(`${API}/leads/${id}/status`, {
+    const updated = await fetchJson(`${API}/leads/${id}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: nextStatus }),
     });
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "Status update failed");
-    }
-
-    const updated = await res.json();
     setLeads((prev) => prev.map((l) => (l._id === id ? updated : l)));
   }
 
   async function convertLead(id) {
-    const res = await fetch(`${API}/leads/${id}/convert`, { method: "POST" });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "Convert failed");
-    }
-    await loadLeads();
+    await fetchJson(`${API}/leads/${id}/convert`, { method: "POST" });
+    const fresh = await fetchJson(`${API}/leads`);
+    setLeads(fresh);
   }
 
   if (loading) {
@@ -181,7 +185,7 @@ export default function Leads() {
                           await updateLeadStatus(row._id, nextStatus);
                         } catch (err) {
                           console.error(err);
-                          alert("Could not update status.");
+                          alert(`Could not update status.\n\n${err.message}`);
                         }
                       }}
                       className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-sm"
@@ -205,7 +209,7 @@ export default function Leads() {
                           await convertLead(row._id);
                         } catch (err) {
                           console.error(err);
-                          alert("Convert failed.");
+                          alert(`Convert failed.\n\n${err.message}`);
                         }
                       }}
                       className="rounded-xl bg-slate-900 px-3 py-1 text-white"
