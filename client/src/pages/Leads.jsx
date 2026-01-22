@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "../lib/api";
+import TableSkeleton from "../components/TableSkeleton";
+import ErrorBanner from "../components/ErrorBanner";
 
 const STATUS = ["all", "new", "contacted", "qualified", "closed"];
 
@@ -8,52 +11,26 @@ const Badge = ({ children }) => (
   </span>
 );
 
-function getApiBase() {
-  // Vite exposes env vars at build time
-  const raw = (import.meta.env.VITE_API_URL || "").trim();
-
-  // Local dev fallback (so it still works on localhost)
-  if (!raw) return "http://localhost:5000/api";
-
-  // Remove trailing slashes
-  let base = raw.replace(/\/+$/, "");
-
-  // If user already included /api, keep it. Otherwise append /api
-  if (!base.endsWith("/api")) base = `${base}/api`;
-
-  return base;
-}
-
-async function fetchJson(url, options) {
-  const res = await fetch(url, options);
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText} - ${text || url}`);
-  }
-
-  return res.json();
-}
-
 export default function Leads() {
-  const API = getApiBase();
-
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
 
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState("");
   const [viewLead, setViewLead] = useState(null);
 
   async function loadLeads() {
-    setLoading(true);
     try {
-      const fresh = await fetchJson(`${API}/leads`);
-      setLeads(fresh);
+      setError("");
+      setLoading(true);
+      const fresh = await apiFetch("/api/leads");
+      setLeads(Array.isArray(fresh) ? fresh : []);
     } catch (err) {
       console.error(err);
-      alert(`Failed to load leads.\n\n${err.message}`);
+      setLeads([]);
+      setError(err?.message || "Failed to load leads.");
     } finally {
       setLoading(false);
     }
@@ -61,7 +38,6 @@ export default function Leads() {
 
   useEffect(() => {
     loadLeads();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = useMemo(() => {
@@ -80,9 +56,8 @@ export default function Leads() {
   }, [query, status, leads]);
 
   async function updateLeadStatus(id, nextStatus) {
-    const updated = await fetchJson(`${API}/leads/${id}/status`, {
+    const updated = await apiFetch(`/api/leads/${id}/status`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: nextStatus }),
     });
 
@@ -90,16 +65,27 @@ export default function Leads() {
   }
 
   async function convertLead(id) {
-    await fetchJson(`${API}/leads/${id}/convert`, { method: "POST" });
-    const fresh = await fetchJson(`${API}/leads`);
-    setLeads(fresh);
+    await apiFetch(`/api/leads/${id}/convert`, { method: "POST" });
+    await loadLeads();
   }
 
   if (loading) {
     return (
-      <div className="space-y-2">
-        <h1 className="text-xl font-semibold text-slate-900">Leads</h1>
-        <p className="text-sm text-slate-500">Loading leads…</p>
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Leads</h1>
+          <p className="mt-1 text-sm text-slate-500">Loading leads…</p>
+        </div>
+
+        <TableSkeleton
+          rows={8}
+          columns={[
+            { label: "Name", width: "w-32" },
+            { label: "Email", width: "w-48" },
+            { label: "Status", width: "w-24" },
+            { label: "Source", width: "w-28" },
+          ]}
+        />
       </div>
     );
   }
@@ -141,11 +127,20 @@ export default function Leads() {
             Refresh
           </button>
 
-          <button className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+          <button
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            onClick={() =>
+              alert("Next in Phase 2: Add Lead modal + POST /api/leads")
+            }
+          >
             + Add Lead
           </button>
         </div>
       </div>
+
+      {error && (
+        <ErrorBanner title="Couldn’t load leads" message={error} onRetry={loadLeads} />
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200">
         <table className="w-full text-left text-sm">
@@ -212,7 +207,7 @@ export default function Leads() {
                           alert(`Convert failed.\n\n${err.message}`);
                         }
                       }}
-                      className="rounded-xl bg-slate-900 px-3 py-1 text-white"
+                      className="rounded-xl bg-slate-900 px-3 py-1 text-white hover:bg-slate-800"
                     >
                       Convert
                     </button>
@@ -221,7 +216,7 @@ export default function Leads() {
               </tr>
             ))}
 
-            {filtered.length === 0 && (
+            {!error && filtered.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
                   No leads found.
@@ -275,3 +270,4 @@ export default function Leads() {
     </div>
   );
 }
+

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-console.log("VITE_API_URL (prod) =", import.meta.env.VITE_API_URL);
-
+import { apiFetch } from "../lib/api";
+import TableSkeleton from "../components/TableSkeleton";
+import ErrorBanner from "../components/ErrorBanner";
 
 const Badge = ({ children }) => (
   <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
@@ -11,30 +12,41 @@ const Badge = ({ children }) => (
 export default function Clients() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   async function load() {
-  try {
-    setLoading(true);
+    try {
+      setError("");
+      setLoading(true);
 
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/clients`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const data = await res.json();
-    setClients(data);
-  } catch (err) {
-    console.error("Failed to load clients:", err);
-    setClients([]); // optional
-  } finally {
-    setLoading(false);
+      const data = await apiFetch("/api/clients");
+      setClients(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load clients:", err);
+      setClients([]);
+      setError(err?.message || "Failed to load clients.");
+    } finally {
+      setLoading(false);
+    }
   }
-}
-
 
   useEffect(() => {
     load();
   }, []);
 
-  if (loading) return <p className="text-slate-500">Loading clients...</p>;
+  if (loading) {
+    return (
+      <TableSkeleton
+        rows={8}
+        columns={[
+          { label: "Name", width: "w-32" },
+          { label: "Email", width: "w-48" },
+          { label: "Business", width: "w-32" },
+          { label: "Notes", width: "w-56" },
+        ]}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -54,7 +66,15 @@ export default function Clients() {
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200">
+      {error && (
+        <ErrorBanner
+          title="Couldn’t load clients"
+          message={error}
+          onRetry={load}
+        />
+      )}
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs text-slate-500">
             <tr>
@@ -67,7 +87,9 @@ export default function Clients() {
           <tbody>
             {clients.map((c) => (
               <tr key={c._id} className="border-t border-slate-200">
-                <td className="px-4 py-3 font-medium text-slate-900">{c.name}</td>
+                <td className="px-4 py-3 font-medium text-slate-900">
+                  {c.name}
+                </td>
                 <td className="px-4 py-3 text-slate-600">{c.email}</td>
                 <td className="px-4 py-3">
                   <Badge>{c.business || "—"}</Badge>
@@ -76,9 +98,12 @@ export default function Clients() {
               </tr>
             ))}
 
-            {clients.length === 0 && (
+            {!error && clients.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-slate-500">
+                <td
+                  colSpan={4}
+                  className="px-4 py-10 text-center text-slate-500"
+                >
                   No clients yet — convert a lead to create one.
                 </td>
               </tr>

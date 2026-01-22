@@ -1,33 +1,53 @@
-import { apiUrl } from "../lib/api";
-
 import { useEffect, useState } from "react";
+import { apiFetch } from "../lib/api";
+import TableSkeleton from "../components/TableSkeleton";
+import ErrorBanner from "../components/ErrorBanner";
 
 export default function Dashboard() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  async function load() {
+    try {
+      setError("");
+      setLoading(true);
+      const data = await apiFetch("/api/leads");
+      setLeads(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setLeads([]);
+      setError(e.message || "Failed to load dashboard data.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    fetch(apiUrl("/api/leads"))
-
-      .then((res) => res.json())
-      .then((data) => {
-        setLeads(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch leads", err);
-        setLoading(false);
-      });
+    load();
   }, []);
 
   if (loading) {
-    return <p className="text-slate-500">Loading leads...</p>;
+    return (
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-xl font-semibold">Dashboard</h1>
+          <p className="mt-1 text-slate-500">Loading summary…</p>
+        </div>
+        <TableSkeleton rows={6} columns={[{ label: "Lead", width: "w-56" }, { label: "Email", width: "w-64" }, { label: "Company", width: "w-40" }, { label: "Status", width: "w-24" }]} />
+      </div>
+    );
   }
 
   return (
     <div>
       <h1 className="text-xl font-semibold">Dashboard</h1>
       <p className="mt-1 text-slate-500">{leads.length} leads in the system</p>
+
+      {error && (
+        <div className="mt-4">
+          <ErrorBanner title="Couldn’t load dashboard" message={error} onRetry={load} />
+        </div>
+      )}
 
       <div className="mt-6 space-y-3">
         {leads.map((lead) => (
