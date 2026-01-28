@@ -9,20 +9,21 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// =========================
 // Basic test route
+// =========================
 app.get("/", (req, res) => {
   res.json({ ok: true, message: "CRM API running" });
 });
 
-/* =========================
-   Models
-========================= */
+// =========================
+// Models
+// =========================
 
 // Lead schema/model
 const LeadSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    // ✅ change: normalize email
     email: { type: String, required: true, trim: true, lowercase: true },
     business: { type: String, default: "", trim: true },
     message: { type: String, default: "", trim: true },
@@ -41,14 +42,11 @@ const Lead = mongoose.model("Lead", LeadSchema);
 // Client schema/model
 const ClientSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true }, // client/company name
-    // ✅ change: normalize email
+    name: { type: String, required: true, trim: true },
     email: { type: String, required: true, trim: true, lowercase: true },
     business: { type: String, default: "", trim: true },
     notes: { type: String, default: "", trim: true },
     source: { type: String, default: "converted", trim: true },
-
-    // ✅ change: enforce "one client per lead" at DB level
     sourceLeadId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Lead",
@@ -61,9 +59,9 @@ const ClientSchema = new mongoose.Schema(
 
 const Client = mongoose.model("Client", ClientSchema);
 
-/* =========================
-   Routes
-========================= */
+// =========================
+// Routes
+// =========================
 
 // Create lead
 app.post("/api/leads", async (req, res) => {
@@ -105,15 +103,18 @@ app.get("/api/leads", async (req, res) => {
 // Update lead status
 app.patch("/api/leads/:id/status", async (req, res) => {
   try {
-    const { id } = req.params;
     const { status } = req.body;
-
     const allowed = ["new", "contacted", "qualified", "closed"];
+
     if (!allowed.includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
     }
 
-    const updated = await Lead.findByIdAndUpdate(id, { status }, { new: true });
+    const updated = await Lead.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
 
     if (!updated) {
       return res.status(404).json({ error: "Lead not found" });
@@ -129,9 +130,7 @@ app.patch("/api/leads/:id/status", async (req, res) => {
 // Delete lead
 app.delete("/api/leads/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const deleted = await Lead.findByIdAndDelete(id);
+    const deleted = await Lead.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Lead not found" });
 
     res.json({ ok: true });
@@ -152,16 +151,13 @@ app.get("/api/clients", async (req, res) => {
   }
 });
 
-// Convert lead -> client
+// Convert lead → client
 app.post("/api/leads/:id/convert", async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const lead = await Lead.findById(id);
+    const lead = await Lead.findById(req.params.id);
     if (!lead) return res.status(404).json({ error: "Lead not found" });
 
-    // Prevent duplicate conversion (app-level)
-    const existing = await Client.findOne({ sourceLeadId: id });
+    const existing = await Client.findOne({ sourceLeadId: lead._id });
     if (existing) {
       if (lead.status !== "closed") {
         lead.status = "closed";
@@ -175,17 +171,15 @@ app.post("/api/leads/:id/convert", async (req, res) => {
       email: lead.email,
       business: lead.business || "",
       notes: lead.message || "",
-      source: lead.source || "converted",
+      source: lead.source,
       sourceLeadId: lead._id,
     });
 
-    // Mark lead closed
     lead.status = "closed";
     await lead.save();
 
     res.status(201).json({ ok: true, client });
   } catch (err) {
-    // ✅ if Mongo rejects duplicate because of unique index
     if (err?.code === 11000) {
       return res
         .status(409)
@@ -197,20 +191,9 @@ app.post("/api/leads/:id/convert", async (req, res) => {
   }
 });
 
-/* =========================
-   Start server
-========================= */
-
-const PORT = process.env.PORT || 5000;
-
-async function start() {
-  try {
-    if (!process.env.MONGODB_URI) {
-      throw new Error("Missing MONGODB_URI in server/.env");
-    }
-
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log("✅ MongoDB connected");
+// =========================
+// Dashboard stats (NEW)
+// =========================
 app.get("/api/stats", async (req, res) => {
   try {
     const totalLeads = await Lead.countDocuments();
@@ -225,34 +208,48 @@ app.get("/api/stats", async (req, res) => {
       return acc;
     }, {});
 
-    const leadsByStatus = {
-      new: statusMap.new || 0,
-      contacted: statusMap.contacted || 0,
-      qualified: statusMap.qualified || 0,
-      closed: statusMap.closed || 0,
-    };
-
-    const conversionRate =
-      totalLeads === 0 ? 0 : Math.round((totalClients / totalLeads) * 100);
-
     res.json({
       totalLeads,
       totalClients,
-      conversionRate,
-      leadsByStatus,
+      conversionRate:
+        totalLeads === 0
+          ? 0
+          : Math.round((totalClients / totalLeads) * 100),
+      leadsByStatus: {
+        new: statusMap.new || 0,
+        contacted: statusMap.contacted || 0,
+        qualified: statusMap.qualified || 0,
+        closed: statusMap.closed || 0,
+      },
     });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Failed to load stats" });
   }
 });
 
-    app.listen(PORT, () => {
-      console.log(`✅ API listening on http://localhost:${PORT}`);
+// =========================
+// Start server
+// =========================
+const PORT = process.env.PORT;
+
+async function start() {
+  try {
+    if (!process.env.MONGODB_URI) {
+      throw new Error("Missing MONGODB_URI");
+    }
+
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log("✅ MongoDB connected");
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`✅ API listening on port ${PORT}`);
     });
   } catch (err) {
-    console.error("❌ Failed to start server:", err.message);
+    console.error("❌ Failed to start server:", err);
     process.exit(1);
   }
 }
 
 start();
+
