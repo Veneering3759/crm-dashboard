@@ -16,6 +16,11 @@ app.get("/", (req, res) => {
   res.json({ ok: true, message: "CRM API running" });
 });
 
+// ✅ Health check for Render
+app.get("/healthz", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 // =========================
 // Models
 // =========================
@@ -192,7 +197,7 @@ app.post("/api/leads/:id/convert", async (req, res) => {
 });
 
 // =========================
-// Dashboard stats (NEW)
+// Dashboard stats
 // =========================
 app.get("/api/stats", async (req, res) => {
   try {
@@ -212,9 +217,7 @@ app.get("/api/stats", async (req, res) => {
       totalLeads,
       totalClients,
       conversionRate:
-        totalLeads === 0
-          ? 0
-          : Math.round((totalClients / totalLeads) * 100),
+        totalLeads === 0 ? 0 : Math.round((totalClients / totalLeads) * 100),
       leadsByStatus: {
         new: statusMap.new || 0,
         contacted: statusMap.contacted || 0,
@@ -231,7 +234,7 @@ app.get("/api/stats", async (req, res) => {
 // =========================
 // Start server
 // =========================
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 5000;
 
 async function start() {
   try {
@@ -252,4 +255,3 @@ async function start() {
 }
 
 start();
-
