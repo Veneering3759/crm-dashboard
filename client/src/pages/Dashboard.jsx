@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { apiFetch } from "../lib/api";
+import { apiFetch, getStats } from "../lib/api";
 import TableSkeleton from "../components/TableSkeleton";
 import ErrorBanner from "../components/ErrorBanner";
 
 export default function Dashboard() {
   const [leads, setLeads] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -12,10 +13,15 @@ export default function Dashboard() {
     try {
       setError("");
       setLoading(true);
+
       const data = await apiFetch("/api/leads");
       setLeads(Array.isArray(data) ? data : []);
+
+      const statsData = await getStats();
+      setStats(statsData);
     } catch (e) {
       setLeads([]);
+      setStats(null);
       setError(e.message || "Failed to load dashboard data.");
     } finally {
       setLoading(false);
@@ -33,7 +39,24 @@ export default function Dashboard() {
           <h1 className="text-xl font-semibold">Dashboard</h1>
           <p className="mt-1 text-slate-500">Loading summary…</p>
         </div>
-        <TableSkeleton rows={6} columns={[{ label: "Lead", width: "w-56" }, { label: "Email", width: "w-64" }, { label: "Company", width: "w-40" }, { label: "Status", width: "w-24" }]} />
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard label="Total leads" value="—" />
+          <StatCard label="New" value="—" />
+          <StatCard label="Qualified" value="—" />
+          <StatCard label="Clients" value="—" />
+          <StatCard label="Conversion" value="—" />
+        </div>
+
+        <TableSkeleton
+          rows={6}
+          columns={[
+            { label: "Lead", width: "w-56" },
+            { label: "Email", width: "w-64" },
+            { label: "Company", width: "w-40" },
+            { label: "Status", width: "w-24" },
+          ]}
+        />
       </div>
     );
   }
@@ -41,11 +64,27 @@ export default function Dashboard() {
   return (
     <div>
       <h1 className="text-xl font-semibold">Dashboard</h1>
-      <p className="mt-1 text-slate-500">{leads.length} leads in the system</p>
+      <p className="mt-1 text-slate-500">
+        {stats?.totalLeads ?? leads.length} leads in the system
+      </p>
 
       {error && (
         <div className="mt-4">
-          <ErrorBanner title="Couldn’t load dashboard" message={error} onRetry={load} />
+          <ErrorBanner
+            title="Couldn’t load dashboard"
+            message={error}
+            onRetry={load}
+          />
+        </div>
+      )}
+
+      {!error && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard label="Total leads" value={stats?.totalLeads ?? leads.length} />
+          <StatCard label="New" value={stats?.leadsByStatus?.new ?? 0} />
+          <StatCard label="Qualified" value={stats?.leadsByStatus?.qualified ?? 0} />
+          <StatCard label="Clients" value={stats?.totalClients ?? 0} />
+          <StatCard label="Conversion" value={`${stats?.conversionRate ?? 0}%`} />
         </div>
       )}
 
@@ -65,6 +104,17 @@ export default function Dashboard() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
+        {value}
       </div>
     </div>
   );

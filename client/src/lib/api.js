@@ -1,7 +1,7 @@
 const BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 
 export function apiUrl(path) {
-  if (!BASE) throw new Error("VITE_API_URL is not set (check Vercel env vars).");
+  if (!BASE) throw new Error("VITE_API_URL is not set (check env vars).");
   return `${BASE}${path}`;
 }
 
@@ -14,7 +14,6 @@ export async function apiFetch(path, options = {}) {
     },
   });
 
-  
   const text = await res.text();
   let data;
   try {
@@ -34,3 +33,7 @@ export async function apiFetch(path, options = {}) {
   return data;
 }
 
+// ✅ Dashboard stats
+export function getStats() {
+  return apiFetch("/api/stats");
+}
