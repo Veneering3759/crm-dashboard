@@ -10,7 +10,7 @@ app.use(cors());
 app.use(express.json());
 
 // =========================
-// Basic test route
+// Basic routes
 // =========================
 app.get("/", (req, res) => {
   res.json({ ok: true, message: "CRM API running" });
@@ -21,9 +21,9 @@ app.get("/healthz", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-// =========================
-// Models
-// =========================
+/* =========================
+   Models
+========================= */
 
 // Lead schema/model
 const LeadSchema = new mongoose.Schema(
@@ -64,9 +64,32 @@ const ClientSchema = new mongoose.Schema(
 
 const Client = mongoose.model("Client", ClientSchema);
 
-// =========================
-// Routes
-// =========================
+// ✅ Activity schema/model (NEW)
+const ActivitySchema = new mongoose.Schema(
+  {
+    action: { type: String, required: true }, // e.g. "Lead created"
+    entityType: { type: String, required: true }, // "lead" | "client"
+    entityId: { type: mongoose.Schema.Types.ObjectId },
+    meta: { type: Object, default: {} },
+  },
+  { timestamps: true }
+);
+
+const Activity = mongoose.model("Activity", ActivitySchema);
+
+// ✅ helper to log activity (NEW)
+async function logActivity(action, entityType, entityId, meta = {}) {
+  try {
+    await Activity.create({ action, entityType, entityId, meta });
+  } catch (err) {
+    // Don't break the app if logging fails
+    console.error("Activity log failed:", err?.message || err);
+  }
+}
+
+/* =========================
+   Routes
+========================= */
 
 // Create lead
 app.post("/api/leads", async (req, res) => {
@@ -85,6 +108,11 @@ app.post("/api/leads", async (req, res) => {
       message,
       status: "new",
       source,
+    });
+
+    await logActivity("Lead created", "lead", lead._id, {
+      name: lead.name,
+      email: lead.email,
     });
 
     res.status(201).json(lead);
@@ -125,6 +153,11 @@ app.patch("/api/leads/:id/status", async (req, res) => {
       return res.status(404).json({ error: "Lead not found" });
     }
 
+    await logActivity("Lead status updated", "lead", updated._id, {
+      status: updated.status,
+      name: updated.name,
+    });
+
     res.json(updated);
   } catch (err) {
     console.error(err);
@@ -137,6 +170,11 @@ app.delete("/api/leads/:id", async (req, res) => {
   try {
     const deleted = await Lead.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Lead not found" });
+
+    await logActivity("Lead deleted", "lead", deleted._id, {
+      name: deleted.name,
+      email: deleted.email,
+    });
 
     res.json({ ok: true });
   } catch (err) {
@@ -162,12 +200,19 @@ app.post("/api/leads/:id/convert", async (req, res) => {
     const lead = await Lead.findById(req.params.id);
     if (!lead) return res.status(404).json({ error: "Lead not found" });
 
+    // Prevent duplicate conversion (app-level)
     const existing = await Client.findOne({ sourceLeadId: lead._id });
     if (existing) {
       if (lead.status !== "closed") {
         lead.status = "closed";
         await lead.save();
       }
+
+      await logActivity("Lead conversion attempted (already converted)", "lead", lead._id, {
+        name: lead.name,
+        clientId: existing._id,
+      });
+
       return res.json({ ok: true, client: existing, alreadyConverted: true });
     }
 
@@ -183,6 +228,11 @@ app.post("/api/leads/:id/convert", async (req, res) => {
     lead.status = "closed";
     await lead.save();
 
+    await logActivity("Lead converted to client", "lead", lead._id, {
+      name: lead.name,
+      clientId: client._id,
+    });
+
     res.status(201).json({ ok: true, client });
   } catch (err) {
     if (err?.code === 11000) {
@@ -196,9 +246,7 @@ app.post("/api/leads/:id/convert", async (req, res) => {
   }
 });
 
-// =========================
 // Dashboard stats
-// =========================
 app.get("/api/stats", async (req, res) => {
   try {
     const totalLeads = await Lead.countDocuments();
@@ -231,9 +279,21 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
-// =========================
-// Start server
-// =========================
+// ✅ Activity feed endpoint (NEW)
+app.get("/api/activity", async (req, res) => {
+  try {
+    const items = await Activity.find().sort({ createdAt: -1 }).limit(20);
+    res.json(items);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load activity" });
+  }
+});
+
+/* =========================
+   Start server
+========================= */
+
 const PORT = process.env.PORT || 5000;
 
 async function start() {

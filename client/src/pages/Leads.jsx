@@ -14,7 +14,6 @@ function StatusPill({ status }) {
     qualified: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     closed: "bg-slate-100 text-slate-700 ring-slate-200",
   };
-
   const cls = map[status] || "bg-slate-100 text-slate-700 ring-slate-200";
 
   return (
@@ -31,6 +30,25 @@ function SourcePill({ source }) {
     <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-200">
       {source || "website"}
     </span>
+  );
+}
+
+function PageShell({ title, subtitle, right, children }) {
+  return (
+    <div className="w-full min-w-0">
+      {/* Sticky header like a real SaaS */}
+      <div className="sticky top-0 z-10 -mx-4 border-b border-slate-200 bg-white/80 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+            <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+          </div>
+          <div className="min-w-0">{right}</div>
+        </div>
+      </div>
+
+      <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-8">{children}</div>
+    </div>
   );
 }
 
@@ -70,7 +88,6 @@ export default function Leads() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-
     return leads.filter((row) => {
       const matchesQuery =
         !q ||
@@ -79,7 +96,6 @@ export default function Leads() {
         (row.business || "").toLowerCase().includes(q);
 
       const matchesStatus = status === "all" || row.status === status;
-
       return matchesQuery && matchesStatus;
     });
   }, [query, status, leads]);
@@ -89,7 +105,6 @@ export default function Leads() {
       method: "PATCH",
       body: JSON.stringify({ status: nextStatus }),
     });
-
     setLeads((prev) => prev.map((l) => (l._id === id ? updated : l)));
   }
 
@@ -112,14 +127,50 @@ export default function Leads() {
     }
   }
 
+  const Controls = (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search name, email, or business…"
+        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 sm:w-72"
+      />
+
+      <select
+        value={status}
+        onChange={(e) => setStatus(e.target.value)}
+        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 sm:w-auto"
+      >
+        {STATUS.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
+
+      <button
+        onClick={loadLeads}
+        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto"
+      >
+        Refresh
+      </button>
+
+      <button
+        className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 sm:w-auto"
+        onClick={() => setAddOpen(true)}
+      >
+        + Add Lead
+      </button>
+    </div>
+  );
+
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Leads</h1>
-          <p className="mt-1 text-sm text-slate-500">Loading leads…</p>
-        </div>
-
+      <PageShell
+        title="Leads"
+        subtitle="Track prospects, update pipeline status, and convert to clients."
+        right={Controls}
+      >
         <TableSkeleton
           rows={8}
           columns={[
@@ -129,72 +180,42 @@ export default function Leads() {
             { label: "Source", width: "w-28" },
           ]}
         />
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header + Controls */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-slate-900">Leads</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Track prospects, update pipeline status, and convert to clients.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name, email, or business…"
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400 sm:w-72"
-          />
-
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-          >
-            {STATUS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-
-          <button
-            onClick={loadLeads}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
-          >
-            Refresh
-          </button>
-
-          <button
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            onClick={() => setAddOpen(true)}
-          >
-            + Add Lead
-          </button>
-        </div>
-      </div>
-
+    <PageShell
+      title="Leads"
+      subtitle="Track prospects, update pipeline status, and convert to clients."
+      right={Controls}
+    >
       {error && (
-        <ErrorBanner
-          title="Couldn’t load leads"
-          message={error}
-          onRetry={loadLeads}
-        />
+        <div className="mb-4">
+          <ErrorBanner
+            title="Couldn’t load leads"
+            message={error}
+            onRetry={loadLeads}
+          />
+        </div>
       )}
 
-      {/* =============== */}
-      {/* MOBILE: Cards   */}
-      {/* =============== */}
+      {/* MOBILE: Cards */}
       <div className="grid gap-3 md:hidden">
         {!error && filtered.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-slate-500">
-            No leads found.
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+            <div className="text-sm font-semibold text-slate-900">
+              No leads yet
+            </div>
+            <div className="mt-1 text-sm text-slate-500">
+              Add your first lead to see it appear here.
+            </div>
+            <button
+              onClick={() => setAddOpen(true)}
+              className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              + Add Lead
+            </button>
           </div>
         ) : (
           filtered.map((row) => (
@@ -277,107 +298,107 @@ export default function Leads() {
         )}
       </div>
 
-      {/* ================= */}
-      {/* DESKTOP: Table    */}
-      {/* ================= */}
-      <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-xs text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Source</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {filtered.map((row) => (
-              <tr
-                key={row._id}
-                className="border-t border-slate-200 hover:bg-slate-50/40"
-              >
-                <td className="px-4 py-3">
-                  <div className="font-semibold text-slate-900">{row.name}</div>
-                  {row.business ? (
-                    <div className="text-xs text-slate-500">{row.business}</div>
-                  ) : null}
-                </td>
-
-                <td className="px-4 py-3 text-slate-600">{row.email}</td>
-
-                <td className="px-4 py-3">
-                  <StatusPill status={row.status} />
-                </td>
-
-                <td className="px-4 py-3">
-                  <SourcePill source={row.source} />
-                </td>
-
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <select
-                      value={row.status}
-                      onChange={async (e) => {
-                        const nextStatus = e.target.value;
-                        try {
-                          await updateLeadStatus(row._id, nextStatus);
-                        } catch (err) {
-                          console.error(err);
-                          alert(`Could not update status.\n\n${err.message}`);
-                        }
-                      }}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm"
-                    >
-                      <option value="new">new</option>
-                      <option value="contacted">contacted</option>
-                      <option value="qualified">qualified</option>
-                      <option value="closed">closed</option>
-                    </select>
-
-                    <button
-                      onClick={() => setViewLead(row)}
-                      className="rounded-xl border border-slate-200 px-3 py-1.5 hover:bg-white"
-                    >
-                      View
-                    </button>
-
-                    <button
-                      onClick={async () => {
-                        try {
-                          await convertLead(row._id);
-                        } catch (err) {
-                          console.error(err);
-                          alert(`Convert failed.\n\n${err.message}`);
-                        }
-                      }}
-                      className="rounded-xl bg-slate-900 px-3 py-1.5 text-white hover:bg-slate-800"
-                    >
-                      Convert
-                    </button>
-
-                    <button
-                      onClick={() => setDeleteTarget(row)}
-                      disabled={deleting}
-                      className="rounded-xl border border-rose-300 bg-rose-100 px-3 py-1.5 text-rose-800 hover:bg-rose-200 disabled:opacity-60"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-
-            {!error && filtered.length === 0 && (
+      {/* DESKTOP: Table (with safe horizontal scroll) */}
+      <div className="hidden md:block">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+          <table className="min-w-[980px] w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
-                  No leads found.
-                </td>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Source</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+              {filtered.map((row) => (
+                <tr
+                  key={row._id}
+                  className="border-t border-slate-200 hover:bg-slate-50/50"
+                >
+                  <td className="px-4 py-3">
+                    <div className="font-semibold text-slate-900">{row.name}</div>
+                    {row.business ? (
+                      <div className="text-xs text-slate-500">{row.business}</div>
+                    ) : null}
+                  </td>
+
+                  <td className="px-4 py-3 text-slate-600">{row.email}</td>
+
+                  <td className="px-4 py-3">
+                    <StatusPill status={row.status} />
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <SourcePill source={row.source} />
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <select
+                        value={row.status}
+                        onChange={async (e) => {
+                          const nextStatus = e.target.value;
+                          try {
+                            await updateLeadStatus(row._id, nextStatus);
+                          } catch (err) {
+                            console.error(err);
+                            alert(`Could not update status.\n\n${err.message}`);
+                          }
+                        }}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm"
+                      >
+                        <option value="new">new</option>
+                        <option value="contacted">contacted</option>
+                        <option value="qualified">qualified</option>
+                        <option value="closed">closed</option>
+                      </select>
+
+                      <button
+                        onClick={() => setViewLead(row)}
+                        className="rounded-xl border border-slate-200 px-3 py-1.5 hover:bg-slate-50"
+                      >
+                        View
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          try {
+                            await convertLead(row._id);
+                          } catch (err) {
+                            console.error(err);
+                            alert(`Convert failed.\n\n${err.message}`);
+                          }
+                        }}
+                        className="rounded-xl bg-slate-900 px-3 py-1.5 text-white hover:bg-slate-800"
+                      >
+                        Convert
+                      </button>
+
+                      <button
+                        onClick={() => setDeleteTarget(row)}
+                        disabled={deleting}
+                        className="rounded-xl border border-rose-300 bg-rose-100 px-3 py-1.5 text-rose-800 hover:bg-rose-200 disabled:opacity-60"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+
+              {!error && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
+                    No leads found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* View modal */}
@@ -421,11 +442,7 @@ export default function Leads() {
       )}
 
       {/* Add lead */}
-      <LeadFormModal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        onCreated={loadLeads}
-      />
+      <LeadFormModal open={addOpen} onClose={() => setAddOpen(false)} onCreated={loadLeads} />
 
       {/* Confirm delete */}
       <ConfirmModal
@@ -439,6 +456,6 @@ export default function Leads() {
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => deleteLead(deleteTarget._id)}
       />
-    </div>
+    </PageShell>
   );
 }
