@@ -1,6 +1,6 @@
 # LeadManager CRM
 
-A production-ready, full-stack CRM designed to help small teams track leads, manage pipeline stages, and convert qualified prospects into clients.
+**LeadManager CRM** is a production-ready, full-stack CRM built to demonstrate clean UI patterns, REST API design, and real-world cloud deployment workflows.
 
 **Live Demo:** https://crm-dashboard-navy.vercel.app  
 **Frontend:** Vite + React + Tailwind  
